@@ -637,7 +637,7 @@ public class ISOUtil {
             int digit = Character.digit((char)b[offset + (i >> 2)], 16);
             if ((digit & 0x08 >> i%4) > 0) {
                 bmap.set(i+1);
-                if (i==65 && maxBits > 128)     // BBB this is redundant (check already done outside
+                if (i==64 && maxBits > 128)     // BBB this is redundant (check already done outside
                     len = 192;                  // BBB of the loop), but I'll leave it for now..
             }
         }
