@@ -468,9 +468,10 @@ public abstract class BaseChannel extends Observable
      */
     public void accept(ServerSocket s) throws IOException {
         ChannelEvent jfr = new ChannelEvent.Accept();
+        Socket ss = null;
         jfr.begin();
         try {
-            Socket ss = s.accept();
+            ss = s.accept();
             this.name = "%d %s:%d".formatted(
               ss.getLocalPort(),
               ss.getInetAddress().getHostAddress(),
@@ -481,6 +482,16 @@ public abstract class BaseChannel extends Observable
         } catch (IOException e) {
             jfr = new ChannelEvent.AcceptException(e.getMessage());
             jfr.begin();
+
+            //TODO: ADDED CLOSE HERE
+            if (ss != null) {
+                try {
+                    ss.close();
+                } catch (IOException closeEx) {
+                    // Log or handle close exception
+                    e.addSuppressed(closeEx);
+                }
+            }
             throw e;
         } finally {
             jfr.commit();

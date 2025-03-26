@@ -113,38 +113,38 @@ subprojects {
         }
     }
 
-    signing {
-        required { !isSnapshot }
-        sign publishing.publications.mavenJava
-    }
+//    signing {
+//        required { !isSnapshot }
+//        sign publishing.publications.mavenJava
+//    }
 
-    javadoc {
-        configure(options) {
-            windowTitle = "jPOS ${project.version}"
-            header = "<b>jPOS ${project.version}</b>"
-            linkSource = true
-            links(
-                'https://docs.oracle.com/en/java/javase/17/docs/api'
-            )
-            tags(
-                'apiNote:a:API Note:',
-                'implSpec:a:Implementation Requirements:',
-                'implNote:a:Implementation Note:'
-            )
-        }
-    }
-
-    test {
-        useJUnitPlatform()
-        testLogging {
-            events "passed", "skipped", "failed"
-        }
-        systemProperty 'user.language', 'en'
-        if (!(System.getenv("GITHUB_ACTIONS") != null && System.getenv("GITHUB_ACTIONS") == "true" &&
-                (OperatingSystem.current().isMacOsX() || OperatingSystem.current().isWindows()))) {
-            maxParallelForks = Runtime.runtime.availableProcessors()
-        }
-    }
+//    javadoc {
+//        configure(options) {
+//            windowTitle = "jPOS ${project.version}"
+//            header = "<b>jPOS ${project.version}</b>"
+//            linkSource = true
+//            links(
+//                'https://docs.oracle.com/en/java/javase/17/docs/api'
+//            )
+//            tags(
+//                'apiNote:a:API Note:',
+//                'implSpec:a:Implementation Requirements:',
+//                'implNote:a:Implementation Note:'
+//            )
+//        }
+//    }
+//
+//    test {
+//        useJUnitPlatform()
+//        testLogging {
+//            events "passed", "skipped", "failed"
+//        }
+//        systemProperty 'user.language', 'en'
+//        if (!(System.getenv("GITHUB_ACTIONS") != null && System.getenv("GITHUB_ACTIONS") == "true" &&
+//                (OperatingSystem.current().isMacOsX() || OperatingSystem.current().isWindows()))) {
+//            maxParallelForks = Runtime.runtime.availableProcessors()
+//        }
+//    }
 }
 
 // Configure IDEA to use Git

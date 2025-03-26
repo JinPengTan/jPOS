@@ -98,6 +98,7 @@ public class ISOServer extends Observable
     private static final long LONG_RELAX = 5000;
     private static final long SHUTDOWN_WAIT = 15000;
     private final UUID uuid = UUID.randomUUID();
+    private boolean purgeConnection = false;
 
    /**
     * @param port port to listen
@@ -144,6 +145,7 @@ public class ISOServer extends Observable
             ((Configurable)socketFactory).setConfiguration (cfg);
         }
         executor = QFactory.executorService(cfg.getBoolean("virtual-threads", false));
+        purgeConnection = cfg.getBoolean("purge-connection", false);
     }
 
     // Helper method to setConfiguration. Handles "allow" and "deny" params
@@ -268,10 +270,24 @@ public class ISOServer extends Observable
             }
         }
     }
-    private void purgeChannels() {
+    private void purgeChannels(ServerChannel serverChannel) {
+        BaseChannel newConnection = (BaseChannel) serverChannel;
         channels.entrySet().removeIf(entry -> {
-            ISOChannel channel = entry.getValue().get();
-            return channel == null || !channel.isConnected();
+            BaseChannel existingConnection = (BaseChannel) entry.getValue().get();
+            if(newConnection.getName().equals(existingConnection.getName())) {
+                return false;
+            }
+            if(purgeConnection) {
+                try {
+                    existingConnection.disconnect ();
+                    fireEvent(new ISOServerClientDisconnectEvent(this, existingConnection));
+                    return true;
+                } catch (IOException e) {
+                    Logger.log(new LogEvent(this, "purge", e));
+                    return false;
+                }
+            }
+            return existingConnection.isConnected();
         });
     }
 
@@ -362,8 +378,10 @@ public class ISOServer extends Observable
             }
             try {
                 channel.disconnect();
+                connectionCount.decrementAndGet();
                 fireEvent(new ISOServerClientDisconnectEvent(ISOServer.this, channel));
             } catch (IOException ex) {
+                connectionCount.decrementAndGet();
                 Logger.log (new LogEvent (this, "session-error", ex));
                 fireEvent(new ISOServerClientDisconnectEvent(ISOServer.this, channel));
             }
@@ -478,62 +496,68 @@ public class ISOServer extends Observable
         serverLoop : while  (!shutdown) {
             round++;
             try {
-                if (permits.availablePermits() <= 0) {
-                    LockSupport.parkNanos(Duration.ofMillis(SMALL_RELAX).toNanos());
-                    if (round % 240 == 0 && cfg.getBoolean("permits-exhaustion-warning", true)) {
-                        log(new Warning("permits exhausted " + serverSocket.toString()));
-                    }
-                    continue;
-                }
-                serverSocket = socketFactory.createServerSocket(port);
-                log (new Listen(port, bindAddr, permits.availablePermits(), backlog));
-                while (!shutdown) {
-                    try {
-                        if (permits.availablePermits() <= 0) {
-                            ChannelEvent jfr = new ChannelEvent.AcceptException(
-                              "Available permits too low (%d)".formatted(permits.availablePermits())
-                            );
-                            jfr.begin();
-                            try {
-                                serverSocket.close();
-                                fireEvent(new ISOServerShutdownEvent(this));
-                            } catch (IOException e){
-                                log (new ThrowableAuditLogEvent(e));
-                            } finally {
-                                jfr.commit();
+//                if (permits.availablePermits() <= 0) {
+//                    LockSupport.parkNanos(Duration.ofMillis(SMALL_RELAX).toNanos());
+//                    if (round % 240 == 0 && cfg.getBoolean("permits-exhaustion-warning", true)) {
+//                        log(new Warning("permits exhausted " + serverSocket.toString()));
+//                    }
+//                    continue;
+//                }
+                //TODO: ADD TRY RESOURCE H`ERE TO PROPERLY SHUTDOWN SOCKET
+                try (ServerSocket ss = socketFactory.createServerSocket(port)) {
+                    serverSocket = ss;
+                    log(new Listen(port, bindAddr, permits.availablePermits(), backlog));
+                    while (!shutdown) {
+                        try {
+//                            if (permits.availablePermits() <= 0) {
+//                                ChannelEvent jfr = new ChannelEvent.AcceptException(
+//                                        "Available permits too low (%d)".formatted(permits.availablePermits())
+//                                );
+//                                jfr.begin();
+//                                try {
+//                                    serverSocket.close();
+//                                    fireEvent(new ISOServerShutdownEvent(this));
+//                                } catch (IOException e) {
+//                                    log(new ThrowableAuditLogEvent(e));
+//                                } finally {
+//                                    jfr.commit();
+//                                }
+//                                continue serverLoop;
+//                            }
+
+                            final ServerChannel channel = (ServerChannel) clientSideChannel.clone();
+                            channel.accept(serverSocket);
+                            purgeChannels(channel);
+                            connectionCount.getAndIncrement();
+                            executor.submit(() -> {
+                                try {
+                                    permits.acquireUninterruptibly();
+                                    createSession(channel).run();
+                                } finally {
+                                    permits.release();
+                                }
+                            });
+                            if(channels.size() != 2) {
+                                throw new RuntimeException("ERROR WRONG CONNECTIONNNNNNNNNNNN");
                             }
-                            continue serverLoop;
-                        }
-                        final ServerChannel channel = (ServerChannel) clientSideChannel.clone();
-                        channel.accept (serverSocket);
-                        if (connectionCount.getAndIncrement() % 100 == 0) {
-                            purgeChannels ();
-                        }
-                        executor.submit (() -> {
-                            try {
-                                permits.acquireUninterruptibly();
-                                createSession(channel).run();
-                            } finally {
-                                permits.release();
+                            setChanged();
+                            notifyObservers(this);
+                            fireEvent(new ISOServerAcceptEvent(this, channel));
+                            if (channel instanceof Observable) {
+                                ((Observable) channel).addObserver(this);
                             }
-                          });
-                        setChanged ();
-                        notifyObservers (this);
-                        fireEvent(new ISOServerAcceptEvent(this, channel));
-                        if (channel instanceof Observable) {
-                            ((Observable)channel).addObserver (this);
-                        }
-                    } catch (SocketException e) {
-                        if (!shutdown) {
-                            log (new ThrowableAuditLogEvent(e));
+                        } catch (SocketException e) {
+                            if (!shutdown) {
+                                log(new ThrowableAuditLogEvent(e));
+                                relax();
+                                continue serverLoop;
+                            }
+                        } catch (IOException e) {
+                            log(new ThrowableAuditLogEvent(e));
                             relax();
-                            continue serverLoop;
                         }
-                    } catch (IOException e) {
-                        log (new ThrowableAuditLogEvent(e));
-                        relax();
-                    }
-                } // while !shutdown
+                    } // while !shutdown
+                }
             } catch (Throwable e) {
                 log (new ThrowableAuditLogEvent(e));
                 relax();
