@@ -271,20 +271,26 @@ public class ISOServer extends Observable
         }
     }
     private void purgeChannels(ServerChannel serverChannel) {
+        Logger.log(new LogEvent (this, "purgeChannels", "Start purge channels"));
         BaseChannel newConnection = (BaseChannel) serverChannel;
         channels.entrySet().removeIf(entry -> {
             BaseChannel existingConnection = (BaseChannel) entry.getValue().get();
             if(newConnection.getName().equals(existingConnection.getName())) {
                 return false;
-            }
-            if(purgeConnection) {
-                try {
-                    existingConnection.disconnect ();
-                    fireEvent(new ISOServerClientDisconnectEvent(this, existingConnection));
-                    return true;
-                } catch (IOException e) {
-                    Logger.log(new LogEvent(this, "purge", e));
-                    return false;
+            } else {
+                Logger.log(new LogEvent (this, "purgeChannels", "Found existing channel to purge"));
+                Logger.log(new LogEvent (this, "purgeChannels", "New connection: " + newConnection.getName()));
+                Logger.log(new LogEvent (this, "purgeChannels", "Existing connection: " + existingConnection.getName()));
+                if(purgeConnection) {
+                    try {
+                        Logger.log(new LogEvent (this, "purgeChannels", "Purge connection: ON, purge channel" + existingConnection.getName()));
+                        existingConnection.disconnect ();
+                        fireEvent(new ISOServerClientDisconnectEvent(this, existingConnection));
+                        return true;
+                    } catch (IOException e) {
+                        Logger.log(new LogEvent(this, "purge", e));
+                        return false;
+                    }
                 }
             }
             return existingConnection.isConnected();
@@ -537,9 +543,6 @@ public class ISOServer extends Observable
                                     permits.release();
                                 }
                             });
-                            if(channels.size() != 2) {
-                                throw new RuntimeException("ERROR WRONG CONNECTIONNNNNNNNNNNN");
-                            }
                             setChanged();
                             notifyObservers(this);
                             fireEvent(new ISOServerAcceptEvent(this, channel));
