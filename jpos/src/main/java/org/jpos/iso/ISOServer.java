@@ -271,19 +271,17 @@ public class ISOServer extends Observable
         }
     }
     private void purgeChannels(ServerChannel serverChannel) {
-        Logger.log(new LogEvent (this, "purgeChannels", "Start purge channels"));
         BaseChannel newConnection = (BaseChannel) serverChannel;
         channels.entrySet().removeIf(entry -> {
             BaseChannel existingConnection = (BaseChannel) entry.getValue().get();
             if(newConnection.getName().equals(existingConnection.getName())) {
                 return false;
             } else {
-                Logger.log(new LogEvent (this, "purgeChannels", "Found existing channel to purge"));
-                Logger.log(new LogEvent (this, "purgeChannels", "New connection: " + newConnection.getName()));
-                Logger.log(new LogEvent (this, "purgeChannels", "Existing connection: " + existingConnection.getName()));
                 if(purgeConnection) {
                     try {
-                        Logger.log(new LogEvent (this, "purgeChannels", "Purge connection: ON, purge channel" + existingConnection.getName()));
+                        Logger.log(new LogEvent (this, "purgeChannels", "Found existing channel to purge"));
+                        Logger.log(new LogEvent (this, "purgeChannels", "New connection: " + newConnection.getName()));
+                        Logger.log(new LogEvent (this, "purgeChannels", "Existing connection to purge: " + existingConnection.getName()));
                         existingConnection.disconnect ();
                         fireEvent(new ISOServerClientDisconnectEvent(this, existingConnection));
                         return true;
